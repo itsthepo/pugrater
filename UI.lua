@@ -20,7 +20,7 @@ local function CreateRateFrame()
   f:SetFrameStrata("DIALOG")
   f:SetToplevel(true)
   f:SetClampedToScreen(true)
-  f:SetSize(320, 200)
+  f:SetSize(450, 240)
   f:SetPoint("CENTER")
   f:SetMovable(true)
   f:EnableMouse(true)
@@ -72,8 +72,8 @@ local function CreateRateFrame()
 
   for i=1,5 do
     local b = CreateFrame("Button", nil, f)
-    b:SetSize(24, 24)
-    b:SetPoint("LEFT", f.ratingText, "RIGHT", 8 + (i-1)*28, 0)
+    b:SetSize(28, 28)
+    b:SetPoint("LEFT", f.ratingText, "RIGHT", 8 + (i-1)*35, 0)
     b.tex = b:CreateTexture(nil, "ARTWORK")
     b.tex:SetAllPoints()
     b.tex:SetTexture(RATING_ICON_FILE_ID)
@@ -93,7 +93,7 @@ local function CreateRateFrame()
 
   f.noteBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
   f.noteBox:SetPoint("LEFT", f.noteText, "RIGHT", 8, 0)
-  f.noteBox:SetSize(220, 24)
+  f.noteBox:SetSize(320, 24)
   f.noteBox:SetAutoFocus(false)
   f.noteBox:SetMaxLetters(120)
 
@@ -209,7 +209,7 @@ local function CreateListFrame()
   f.title:SetText("PugRater: Players")
 
   f.searchLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.searchLabel:SetPoint("TOPLEFT", 16, -40)
+  f.searchLabel:SetPoint("TOPLEFT", 16, -80)
   f.searchLabel:SetText("Search:")
 
   f.search = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
@@ -219,7 +219,7 @@ local function CreateListFrame()
 
   -- headers
   f.hName = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.hName:SetPoint("TOPLEFT", 16, -70)
+  f.hName:SetPoint("TOPLEFT", 16, -110)
   f.hName:SetText("Name")
   f.hRating = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   f.hRating:SetPoint("LEFT", f.hName, "RIGHT", 230, 0)
@@ -228,8 +228,33 @@ local function CreateListFrame()
   f.hNote:SetPoint("LEFT", f.hRating, "RIGHT", 80, 0)
   f.hNote:SetText("Note")
 
+  -- sort buttons row positioned below headers
+  f.sortName = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.sortName:SetSize(70, 20)
+  f.sortName:SetPoint("TOPLEFT", 16, -135)
+  f.sortName:SetText("Sort A-Z")
+  f.sortName:SetScript("OnClick", function() f.sortMode = "name"; addon.UI:RefreshList() end)
+
+  f.sortRating = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.sortRating:SetSize(65, 20)
+  f.sortRating:SetPoint("LEFT", f.sortName, "RIGHT", 190, 0)
+  f.sortRating:SetText("Bad 1st")
+  f.sortRating:SetScript("OnClick", function() f.sortMode = "rating"; addon.UI:RefreshList() end)
+
+  f.sortGood = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.sortGood:SetSize(75, 20)
+  f.sortGood:SetPoint("LEFT", f.sortRating, "RIGHT", 10, 0)
+  f.sortGood:SetText("Good 1st")
+  f.sortGood:SetScript("OnClick", function() f.sortMode = "rating_desc"; addon.UI:RefreshList() end)
+
+  f.sortRecent = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.sortRecent:SetSize(70, 20)
+  f.sortRecent:SetPoint("LEFT", f.sortGood, "RIGHT", 80, 0)
+  f.sortRecent:SetText("Recent")
+  f.sortRecent:SetScript("OnClick", function() f.sortMode = "recent"; addon.UI:RefreshList() end)
+
   f.scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
-  f.scroll:SetPoint("TOPLEFT", 16, -90)
+  f.scroll:SetPoint("TOPLEFT", 16, -160)
   f.scroll:SetPoint("BOTTOMRIGHT", -36, 50)
 
   f.content = CreateFrame("Frame", nil, f)
@@ -248,31 +273,6 @@ local function CreateListFrame()
   f.close:SetFrameLevel((f:GetFrameLevel() or 0) + 2)
 
   f.sortMode = "recent" -- or "name" or "rating"
-
-  -- sort buttons
-  f.sortName = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.sortName:SetSize(60, 20)
-  f.sortName:SetPoint("LEFT", f.hName, "RIGHT", 150, 0)
-  f.sortName:SetText("Sort A-Z")
-  f.sortName:SetScript("OnClick", function() f.sortMode = "name"; addon.UI:RefreshList() end)
-
-  f.sortRating = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.sortRating:SetSize(60, 20)
-  f.sortRating:SetPoint("LEFT", f.hRating, "RIGHT", 60, 0)
-  f.sortRating:SetText("Bad 1st")
-  f.sortRating:SetScript("OnClick", function() f.sortMode = "rating"; addon.UI:RefreshList() end)
-
-  f.sortGood = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.sortGood:SetSize(70, 20)
-  f.sortGood:SetPoint("LEFT", f.sortRating, "RIGHT", 8, 0)
-  f.sortGood:SetText("Good 1st")
-  f.sortGood:SetScript("OnClick", function() f.sortMode = "rating_desc"; addon.UI:RefreshList() end)
-
-  f.sortRecent = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.sortRecent:SetSize(60, 20)
-  f.sortRecent:SetPoint("LEFT", f.hNote, "RIGHT", 60, 0)
-  f.sortRecent:SetText("Recent")
-  f.sortRecent:SetScript("OnClick", function() f.sortMode = "recent"; addon.UI:RefreshList() end)
 
   f.search:SetScript("OnTextChanged", function() addon.UI:RefreshList() end)
 
