@@ -5,9 +5,8 @@ local UI = {}
 addon.UI = UI
 
 local LOGO_PATH = "Interface/AddOns/PugRater/media/pugrater_logo"
-local RATING_ICON_FILE_ID = 413585 -- achievement-guildperk-honorablemention-rank2
--- Logo size (tune these to match your image aspect ratio to avoid squish)
-local LOGO_WIDTH, LOGO_HEIGHT = 128, 64
+local RATING_ICON_FILE_ID = 413585
+local LOGO_WIDTH, LOGO_HEIGHT = 128, 128
 
 local function NormalizeName(fullName)
   local name, realm = fullName:match("([^%-]+)%-?(.*)")
@@ -27,6 +26,13 @@ local function CreateRateFrame()
   f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", f.StartMoving)
   f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  
+  f:SetScript("OnKeyDown", function(self, key)
+    if key == "ESCAPE" then
+      self:Hide()
+    end
+  end)
+  f:EnableKeyboard(true)
 
   f:SetBackdrop({
     bgFile = "Interface/Tooltips/UI-Tooltip-Background",
@@ -36,12 +42,27 @@ local function CreateRateFrame()
   })
   f:SetBackdropColor(0,0,0,0.9)
 
+  if not f.logo then
+    f.logo = f:CreateTexture(nil, "ARTWORK")
+    f.logo:SetSize(80, 80)
+    f.logo:SetPoint("CENTER", -75, 100)
+    f.logo:SetTexture(LOGO_PATH)
+    f.logo:Hide()
+  end
+  f.logo:SetShown(true)
+
   f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  f.title:SetPoint("TOP", 0, -10)
-  f.title:SetText("PugRater: Rate Player")
+  f.title:SetPoint("CENTER", 22, 100.50)
+  f.title:SetText("- Rate Player")
+
+  f.closeX = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.closeX:SetSize(24, 24)
+  f.closeX:SetPoint("TOPRIGHT", -8, -8)
+  f.closeX:SetText("X")
+  f.closeX:SetScript("OnClick", function() f:Hide() end)
 
   f.nameText = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.nameText:SetPoint("TOPLEFT", 16, -40)
+  f.nameText:SetPoint("TOPLEFT", 16, -50)
   f.nameText:SetText("Player:")
 
   f.nameValue = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -49,7 +70,7 @@ local function CreateRateFrame()
   f.nameValue:SetText("")
 
   f.ratingText = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.ratingText:SetPoint("TOPLEFT", f.nameText, "BOTTOMLEFT", 0, -16)
+  f.ratingText:SetPoint("TOPLEFT", f.nameText, "BOTTOMLEFT", 0, -30)
   f.ratingText:SetText("Rating:")
 
   f.stars = {}
@@ -57,10 +78,10 @@ local function CreateRateFrame()
     if not btn or not btn.tex then return end
     if selected then
       btn.tex:SetDesaturated(false)
-      btn.tex:SetVertexColor(1, 0.82, 0) -- gold
+      btn.tex:SetVertexColor(1.5, 1.2, 0)
     else
       btn.tex:SetDesaturated(true)
-      btn.tex:SetVertexColor(0.7, 0.7, 0.7)
+      btn.tex:SetVertexColor(0.3, 0.3, 0.3)
     end
   end
 
@@ -68,18 +89,61 @@ local function CreateRateFrame()
     for j=1,5 do
       SetIconSelected(self.stars[j], j <= (current or 0))
     end
+    local rating = current or 0
+    if rating == 0 then
+      self.ratingDisplay:SetText("")
+    elseif rating == 1 then
+      self.ratingDisplay:SetText("1 Star")
+    else
+      self.ratingDisplay:SetText(rating .. " Stars")
+    end
   end
 
   for i=1,5 do
     local b = CreateFrame("Button", nil, f)
     b:SetSize(28, 28)
-    b:SetPoint("LEFT", f.ratingText, "RIGHT", 8 + (i-1)*35, 0)
+    b:SetPoint("LEFT", f.ratingText, "RIGHT", 25 + (i-1)*35, 0)
     b.tex = b:CreateTexture(nil, "ARTWORK")
-    b.tex:SetAllPoints()
+    
+    local cropAmount = 0.15
+    local horizontalOffset = 0.05
+    local verticalOffset = -0.06
+    local angle = math.rad(36)
+    local cos_a = math.cos(angle)
+    local sin_a = math.sin(angle)
+    local cx, cy = 0.5 + horizontalOffset, 0.5 - verticalOffset
+    local size = 0.35
+    
+    local corners = {
+      {-size, -size}, {-size, size}, {size, -size}, {size, size}
+    }
+    
+    local rotated = {}
+    for j, corner in ipairs(corners) do
+      local x, y = corner[1], corner[2]
+      rotated[j] = {
+        cx + (x * cos_a - y * sin_a),
+        cy + (x * sin_a + y * cos_a)
+      }
+    end
+    
+    b.tex:SetTexCoord(
+      rotated[1][1], rotated[1][2],
+      rotated[2][1], rotated[2][2],
+      rotated[3][1], rotated[3][2],
+      rotated[4][1], rotated[4][2]
+    )
+    
+    b.tex:SetPoint("TOPLEFT", b, "TOPLEFT", -2, 1)
+    b.tex:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 1)
     b.tex:SetTexture(RATING_ICON_FILE_ID)
+    
+    b.mask = b:CreateMaskTexture()
+    b.mask:SetAllPoints(b.tex)
+    b.mask:SetTexture("Interface/CharacterFrame/TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    b.tex:AddMaskTexture(b.mask)
+    
     SetIconSelected(b, false)
-    b:SetScript("OnEnter", function(self) if self.tex then self.tex:SetAlpha(1) end end)
-    b:SetScript("OnLeave", function(self) if self.tex then self.tex:SetAlpha(1) end end)
     b:SetScript("OnClick", function()
       f.currentRating = i
       f:UpdateStars(i)
@@ -87,15 +151,20 @@ local function CreateRateFrame()
     f.stars[i] = b
   end
 
+  f.ratingDisplay = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.ratingDisplay:SetPoint("LEFT", f.stars[5], "RIGHT", 15, 0)
+  f.ratingDisplay:SetTextColor(1, 1, 1)
+  f.ratingDisplay:SetText("")
+
   f.noteText = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.noteText:SetPoint("TOPLEFT", f.ratingText, "BOTTOMLEFT", 0, -16)
+  f.noteText:SetPoint("TOPLEFT", f.ratingText, "BOTTOMLEFT", 0, -30)
   f.noteText:SetText("Note:")
 
   f.noteBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-  f.noteBox:SetPoint("LEFT", f.noteText, "RIGHT", 8, 0)
-  f.noteBox:SetSize(320, 24)
+  f.noteBox:SetPoint("TOPLEFT", f.noteText, "BOTTOMLEFT", 7, -2)
+  f.noteBox:SetSize(400, 24)
   f.noteBox:SetAutoFocus(false)
-  f.noteBox:SetMaxLetters(120)
+  f.noteBox:SetMaxLetters(500)
 
   f.save = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
   f.save:SetSize(80, 24)
@@ -105,25 +174,32 @@ local function CreateRateFrame()
   f.cancel = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
   f.cancel:SetSize(80, 24)
   f.cancel:SetPoint("RIGHT", f.save, "LEFT", -8, 0)
-  f.cancel:SetText("Close")
+  f.cancel:SetText("Undo")
 
-  -- Add List button to open the player list
   f.list = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.list:SetSize(80, 24)
-  f.list:SetPoint("RIGHT", f.cancel, "LEFT", -8, 0)
-  f.list:SetText("List")
+  f.list:SetSize(100, 24)
+  f.list:SetPoint("BOTTOMLEFT", 16, 16)
+  f.list:SetText("Player List")
   f.list:SetScript("OnClick", function() addon.UI:ShowList() end)
 
-  -- Ensure buttons are not on an excessively high strata/level
   local baseLevel = f:GetFrameLevel() or 0
-  local function norm(btn)
+  local function normalizeButton(btn)
     if not btn then return end
     btn:SetFrameStrata(f:GetFrameStrata())
     btn:SetFrameLevel(baseLevel + 2)
   end
-  norm(f.save); norm(f.cancel); norm(f.list)
+  normalizeButton(f.save)
+  normalizeButton(f.cancel)
+  normalizeButton(f.list)
+  normalizeButton(f.closeX)
 
-  f.cancel:SetScript("OnClick", function() f:Hide() end)
+  f.cancel:SetScript("OnClick", function() 
+    local currentTarget = f.targetName
+    f:Hide() 
+    if currentTarget and addon.UI then
+      addon.UI:Show(currentTarget)
+    end
+  end)
   f.save:SetScript("OnClick", function()
     if f.targetName and f.currentRating then
       addon:SetRating(f.targetName, f.currentRating, f.noteBox:GetText())
@@ -132,38 +208,36 @@ local function CreateRateFrame()
     if addon.UI and addon.UI.RefreshList then addon.UI:RefreshList() end
   end)
 
-  -- Optional logo
-  if not f.logo then
-    f.logo = f:CreateTexture(nil, "ARTWORK")
-    f.logo:SetSize(LOGO_WIDTH, LOGO_HEIGHT)
-    f.logo:SetPoint("TOPLEFT", 10, -8)
-    f.logo:SetTexture(LOGO_PATH)
-    f.logo:Hide()
-  end
-  -- show only if file exists (WoW loads silently; we toggle once to force load)
-  f.logo:SetShown(true)
-
-  -- Keep this frame above others and non-click-through
   f:HookScript("OnShow", function(self)
-    -- raise above others
     local topLevel = (UIParent:GetFrameLevel() or 0) + 100
     local listFrameRef = rawget(_G, "PugRaterListFrame") or listFrame
     local postFrameRef = rawget(_G, "PugRaterPostRunFrame") or postRunFrame
     if listFrameRef and listFrameRef.GetFrameLevel then
       topLevel = math.max(topLevel, (listFrameRef:GetFrameLevel() or 0) + 50)
-      listFrameRef:EnableMouse(false) -- prevent click-through while editor is open
     end
     if postFrameRef and postFrameRef.GetFrameLevel then
       topLevel = math.max(topLevel, (postFrameRef:GetFrameLevel() or 0) + 50)
-      postFrameRef:EnableMouse(false)
     end
     self:SetFrameLevel(topLevel)
     self:Raise()
   end)
 
   f:HookScript("OnHide", function()
-    if listFrame then listFrame:EnableMouse(true) end
-    if postRunFrame then postRunFrame:EnableMouse(true) end
+    local listFrameRef = rawget(_G, "PugRaterListFrame") or listFrame
+    if listFrameRef then 
+      listFrameRef:EnableMouse(true)
+      if listFrameRef.SetMovable then
+        listFrameRef:SetMovable(true)
+        listFrameRef:RegisterForDrag("LeftButton")
+      end
+    end
+    if postRunFrame then 
+      postRunFrame:EnableMouse(true)
+      if postRunFrame.SetMovable then
+        postRunFrame:SetMovable(true)
+        postRunFrame:RegisterForDrag("LeftButton")
+      end
+    end
   end)
 
   f:Hide()
@@ -185,7 +259,6 @@ function UI:Show(playerName)
   rateFrame:Show()
 end
 
--- Simple Player List UI (scrollable, searchable)
 local function CreateListFrame()
   local f = CreateFrame("Frame", "PugRaterListFrame", UIParent, "BackdropTemplate")
   f:SetFrameStrata("HIGH")
@@ -196,6 +269,22 @@ local function CreateListFrame()
   f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", f.StartMoving)
   f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  
+  f:SetScript("OnKeyDown", function(self, key)
+    if key == "ESCAPE" then
+      self:Hide()
+    end
+  end)
+  f:EnableKeyboard(true)
+  
+  f:SetScript("OnShow", function(self)
+    self:EnableKeyboard(false)
+    C_Timer.After(0.1, function()
+      if self:IsShown() then
+        self:EnableKeyboard(true)
+      end
+    end)
+  end)
   f:SetBackdrop({
     bgFile = "Interface/Tooltips/UI-Tooltip-Background",
     edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -204,87 +293,130 @@ local function CreateListFrame()
   })
   f:SetBackdropColor(0,0,0,0.9)
 
-  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  f.title:SetPoint("TOP", 0, -10)
-  f.title:SetText("PugRater: Players")
+  f.closeX = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.closeX:SetSize(24, 24)
+  f.closeX:SetPoint("TOPRIGHT", -16, -16)
+  f.closeX:SetText("X")
+  f.closeX:SetScript("OnClick", function() f:Hide() end)
+  f.closeX:SetFrameStrata(f:GetFrameStrata())
+  f.closeX:SetFrameLevel((f:GetFrameLevel() or 0) + 2)
+
+  if not f.logo then
+    f.logo = f:CreateTexture(nil, "ARTWORK")
+    f.logo:SetSize(LOGO_WIDTH, LOGO_HEIGHT)
+    f.logo:SetPoint("TOP", 0, 20)
+    f.logo:SetTexture(LOGO_PATH)
+    f.logo:Hide()
+  end
+  f.logo:SetShown(true)
+
+  f.sortLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.sortLabel:SetPoint("TOPLEFT", 16, -80)
+  f.sortLabel:SetText("Sort By:")
+
+  f.sortDropdown = CreateFrame("Button", nil, f, "UIDropDownMenuTemplate")
+  f.sortDropdown:SetPoint("LEFT", f.sortLabel, "RIGHT", -15, -2)
 
   f.searchLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.searchLabel:SetPoint("TOPLEFT", 16, -80)
+  f.searchLabel:SetPoint("LEFT", f.sortDropdown, "RIGHT", 0, 2)
   f.searchLabel:SetText("Search:")
 
   f.search = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
-  f.search:SetSize(220, 24)
+  f.search:SetSize(180, 24)
   f.search:SetPoint("LEFT", f.searchLabel, "RIGHT", 8, 0)
   f.search:SetAutoFocus(false)
 
-  -- headers
+  f.ratingFilterLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.ratingFilterLabel:SetPoint("TOPRIGHT", -120, -79)
+  f.ratingFilterLabel:SetText("Filter:")
+
+  f.ratingFilter = CreateFrame("Button", nil, f, "UIDropDownMenuTemplate")
+  f.ratingFilter:SetPoint("LEFT", f.ratingFilterLabel, "RIGHT", -15, -2)
+  
+  f.selectedRatingFilter = "all"
+
   f.hName = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.hName:SetPoint("TOPLEFT", 16, -110)
+  f.hName:SetPoint("TOPLEFT", 23, -110)
   f.hName:SetText("Name")
   f.hRating = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.hRating:SetPoint("LEFT", f.hName, "RIGHT", 230, 0)
+  f.hRating:SetPoint("LEFT", f.hName, "RIGHT", 210, 0)
   f.hRating:SetText("Rating")
   f.hNote = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.hNote:SetPoint("LEFT", f.hRating, "RIGHT", 80, 0)
+  f.hNote:SetPoint("LEFT", f.hRating, "RIGHT", 25, 0)
   f.hNote:SetText("Note")
 
-  -- sort buttons row positioned below headers
-  f.sortName = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.sortName:SetSize(70, 20)
-  f.sortName:SetPoint("TOPLEFT", 16, -135)
-  f.sortName:SetText("Sort A-Z")
-  f.sortName:SetScript("OnClick", function() f.sortMode = "name"; addon.UI:RefreshList() end)
-
-  f.sortRating = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.sortRating:SetSize(65, 20)
-  f.sortRating:SetPoint("LEFT", f.sortName, "RIGHT", 190, 0)
-  f.sortRating:SetText("Bad 1st")
-  f.sortRating:SetScript("OnClick", function() f.sortMode = "rating"; addon.UI:RefreshList() end)
-
-  f.sortGood = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.sortGood:SetSize(75, 20)
-  f.sortGood:SetPoint("LEFT", f.sortRating, "RIGHT", 10, 0)
-  f.sortGood:SetText("Good 1st")
-  f.sortGood:SetScript("OnClick", function() f.sortMode = "rating_desc"; addon.UI:RefreshList() end)
-
-  f.sortRecent = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.sortRecent:SetSize(70, 20)
-  f.sortRecent:SetPoint("LEFT", f.sortGood, "RIGHT", 80, 0)
-  f.sortRecent:SetText("Recent")
-  f.sortRecent:SetScript("OnClick", function() f.sortMode = "recent"; addon.UI:RefreshList() end)
-
   f.scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
-  f.scroll:SetPoint("TOPLEFT", 16, -160)
-  f.scroll:SetPoint("BOTTOMRIGHT", -36, 50)
+  f.scroll:SetPoint("TOPLEFT", 16, -135)
+  f.scroll:SetPoint("BOTTOMRIGHT", -36, 16)
 
   f.content = CreateFrame("Frame", nil, f)
   f.content:SetSize(1,1)
   f.scroll:SetScrollChild(f.content)
 
   f.rows = {}
-
-  f.close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-  f.close:SetSize(80, 24)
-  f.close:SetPoint("BOTTOMRIGHT", -16, 16)
-  f.close:SetText("Close")
-  f.close:SetScript("OnClick", function() f:Hide() end)
-  -- normalize close button strata/level
-  f.close:SetFrameStrata(f:GetFrameStrata())
-  f.close:SetFrameLevel((f:GetFrameLevel() or 0) + 2)
-
-  f.sortMode = "recent" -- or "name" or "rating"
+  f.sortMode = "recent"
 
   f.search:SetScript("OnTextChanged", function() addon.UI:RefreshList() end)
 
-  -- Optional logo
-  if not f.logo then
-    f.logo = f:CreateTexture(nil, "ARTWORK")
-    f.logo:SetSize(LOGO_WIDTH, LOGO_HEIGHT)
-    f.logo:SetPoint("TOPLEFT", 10, -8)
-    f.logo:SetTexture(LOGO_PATH)
-    f.logo:Hide()
+  local function RatingFilterDropDown_OnClick(self)
+    f.selectedRatingFilter = self.value
+    UIDropDownMenu_SetText(f.ratingFilter, self:GetText())
+    addon.UI:RefreshList()
   end
-  f.logo:SetShown(true)
+
+  local function RatingFilterDropDown_Initialize()
+    local info = {}
+    local ratings = {
+      {text = "All", value = "all"},
+      {text = "Unrated", value = "unrated"},
+      {text = "1 Star", value = "1"},
+      {text = "2 Stars", value = "2"},
+      {text = "3 Stars", value = "3"},
+      {text = "4 Stars", value = "4"},
+      {text = "5 Stars", value = "5"}
+    }
+    
+    for _, rating in ipairs(ratings) do
+      info.text = rating.text
+      info.value = rating.value
+      info.func = RatingFilterDropDown_OnClick
+      info.checked = (f.selectedRatingFilter == rating.value)
+      UIDropDownMenu_AddButton(info)
+    end
+  end
+
+  UIDropDownMenu_Initialize(f.ratingFilter, RatingFilterDropDown_Initialize)
+  UIDropDownMenu_SetWidth(f.ratingFilter, 80)
+  UIDropDownMenu_SetText(f.ratingFilter, "All")
+
+  -- Setup sort dropdown
+  local function SortDropDown_OnClick(self)
+    f.sortMode = self.value
+    UIDropDownMenu_SetText(f.sortDropdown, self:GetText())
+    addon.UI:RefreshList()
+  end
+
+  local function SortDropDown_Initialize()
+    local info = {}
+    local sortOptions = {
+      {text = "Recent", value = "recent"},
+      {text = "Name A-Z", value = "name"},
+      {text = "Bad First", value = "rating"},
+      {text = "Good First", value = "rating_desc"}
+    }
+    
+    for _, option in ipairs(sortOptions) do
+      info.text = option.text
+      info.value = option.value
+      info.func = SortDropDown_OnClick
+      info.checked = (f.sortMode == option.value)
+      UIDropDownMenu_AddButton(info)
+    end
+  end
+
+  UIDropDownMenu_Initialize(f.sortDropdown, SortDropDown_Initialize)
+  UIDropDownMenu_SetWidth(f.sortDropdown, 100)
+  UIDropDownMenu_SetText(f.sortDropdown, "Recent")
 
   f:Hide()
   return f
@@ -292,46 +424,66 @@ end
 
 local listFrame
 
-local function matchesFilter(key, rec, needle)
-  if not needle or needle == "" then return true end
-  needle = needle:lower()
-  if key:lower():find(needle, 1, true) then return true end
-  if rec.note and rec.note:lower():find(needle, 1, true) then return true end
-  return false
+local function truncateText(text, maxLength)
+  if not text or text == "" then return "" end
+  if string.len(text) <= maxLength then
+    return text
+  else
+    return string.sub(text, 1, maxLength - 3) .. "..."
+  end
+end
+
+local function matchesFilter(key, rec, needle, ratingFilter)
+  if needle and needle ~= "" then
+    needle = needle:lower()
+    if not (key:lower():find(needle, 1, true) or (rec.note and rec.note:lower():find(needle, 1, true))) then
+      return false
+    end
+  end
+  
+  if ratingFilter and ratingFilter ~= "all" then
+    local rating = rec.rating or 0
+    if ratingFilter == "unrated" then
+      if rating > 0 then return false end
+    else
+      local targetRating = tonumber(ratingFilter)
+      if rating ~= targetRating then return false end
+    end
+  end
+  
+  return true
 end
 
 function UI:RefreshList()
   listFrame = listFrame or CreateListFrame()
   local needle = listFrame.search:GetText() or ""
+  local ratingFilter = listFrame.selectedRatingFilter or "all"
 
-  -- collect entries
   local entries = {}
   for key, rec in pairs(PugRaterDB.players or {}) do
-    if matchesFilter(key, rec, needle) then
+    if matchesFilter(key, rec, needle, ratingFilter) then
       table.insert(entries, { key = key, rec = rec })
     end
   end
 
-  -- sort
   if listFrame.sortMode == "name" then
     table.sort(entries, function(a,b) return a.key:lower() < b.key:lower() end)
   elseif listFrame.sortMode == "rating" then
     table.sort(entries, function(a,b)
       local ar, br = a.rec.rating or 0, b.rec.rating or 0
       if ar == br then return (a.rec.lastSeen or 0) > (b.rec.lastSeen or 0) end
-      return ar < br -- bad first
+      return ar < br
     end)
   elseif listFrame.sortMode == "rating_desc" then
     table.sort(entries, function(a,b)
       local ar, br = a.rec.rating or 0, b.rec.rating or 0
       if ar == br then return (a.rec.lastSeen or 0) > (b.rec.lastSeen or 0) end
-      return ar > br -- good first
+      return ar > br
     end)
-  else -- recent
+  else
     table.sort(entries, function(a,b) return (a.rec.lastSeen or 0) > (b.rec.lastSeen or 0) end)
   end
 
-  -- build rows (simple, all rows in content)
   for i,row in ipairs(listFrame.rows) do row:Hide() end
 
   local ROW_H, WIDTH = 22, (listFrame.scroll:GetWidth() or 540)
@@ -347,6 +499,12 @@ function UI:RefreshList()
       else
         row:SetPoint("TOPLEFT", listFrame.rows[i-1], "BOTTOMLEFT", 0, 0)
       end
+      
+      row.bg = row:CreateTexture(nil, "BACKGROUND")
+      row.bg:SetAllPoints()
+      row.bg:SetTexture("Interface/Buttons/UI-Listbox-Highlight")
+      row.bg:SetAlpha(0)
+      
       row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
       row.name:SetPoint("LEFT", 8, 0)
       row.name:SetWidth(240)
@@ -359,8 +517,27 @@ function UI:RefreshList()
 
       row.note = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       row.note:SetPoint("LEFT", row.rating, "RIGHT", 8, 0)
-      row.note:SetWidth(WIDTH - 20 - 240 - 60 - 32)
+      row.note:SetWidth(WIDTH - 20 - 240 - 60 - 16)
       row.note:SetJustifyH("LEFT")
+
+      row:SetScript("OnEnter", function(self)
+        self.bg:SetAlpha(0.3)
+        self.name:SetTextColor(1, 1, 0.5)
+        self.rating:SetTextColor(1, 1, 0.5)
+        self.note:SetTextColor(0.5, 0.8, 1)
+      end)
+      
+      row:SetScript("OnLeave", function(self)
+        self.bg:SetAlpha(0)
+        self.name:SetTextColor(1, 1, 1)
+        local r = tonumber(self.ratingValue or 0)
+        if not r or r <= 0 then
+          self.rating:SetTextColor(0.6, 0.6, 0.6)
+        else
+          self.rating:SetTextColor(1, 0.82, 0)
+        end
+        self.note:SetTextColor(0.5, 0.8, 1)
+      end)
 
       row:SetScript("OnClick", function(self)
         addon.UI:Show(self.key)
@@ -373,6 +550,7 @@ function UI:RefreshList()
     row.name:SetText(e.key)
 
     local r = tonumber(e.rec.rating or 0)
+    row.ratingValue = r
     if not r or r <= 0 then
       row.rating:SetText("unrated")
       row.rating:SetTextColor(0.6, 0.6, 0.6)
@@ -381,7 +559,8 @@ function UI:RefreshList()
       row.rating:SetTextColor(1, 0.82, 0)
     end
 
-    row.note:SetText(e.rec.note or "")
+    row.note:SetText(truncateText(e.rec.note or "", 30))
+    row.note:SetTextColor(0.5, 0.8, 1)
     row:Show()
   end
 end
@@ -392,12 +571,10 @@ function UI:ShowList()
   listFrame:Show()
 end
 
--- Post-run popup listing teammates with Rate buttons
 local function CreatePostRunFrame()
   local f = CreateFrame("Frame", "PugRaterPostRunFrame", UIParent, "BackdropTemplate")
   f:SetFrameStrata("HIGH")
   f:SetSize(460, 280)
-  -- Anchor to the left side of the screen instead of center (end of a key)
   f:SetPoint("LEFT", UIParent, "LEFT", 20, 0)
   f:SetMovable(true)
   f:EnableMouse(true)
@@ -434,12 +611,11 @@ local function CreatePostRunFrame()
         row.nameFS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         row.nameFS:SetPoint("LEFT", 4, 0)
         row.button = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-        row.button:SetSize(110, 22)
+        row.button:SetSize(105, 22)
         row.button:SetPoint("RIGHT", 0, 0)
         row.button:SetText("Rate Player")
         row.button:SetScript("OnClick", function()
           addon:ShowRateFrame(row.playerName)
-          -- keep this window open for rating multiple players
         end)
         self.rows[i] = row
       end
@@ -457,15 +633,13 @@ local function CreatePostRunFrame()
   f.close:SetPoint("BOTTOMRIGHT", -16, 16)
   f.close:SetText("Close")
   f.close:SetScript("OnClick", function() f:Hide() end)
-  -- normalize close button strata/level
   f.close:SetFrameStrata(f:GetFrameStrata())
   f.close:SetFrameLevel((f:GetFrameLevel() or 0) + 2)
 
-  -- Optional logo
   if not f.logo then
     f.logo = f:CreateTexture(nil, "ARTWORK")
     f.logo:SetSize(LOGO_WIDTH, LOGO_HEIGHT)
-    f.logo:SetPoint("TOPLEFT", 10, -8)
+    f.logo:SetPoint("TOPLEFT", 16, -8)
     f.logo:SetTexture(LOGO_PATH)
     f.logo:Hide()
   end
