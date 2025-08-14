@@ -30,9 +30,11 @@ local function CreateRateFrame()
   f:SetScript("OnKeyDown", function(self, key)
     if key == "ESCAPE" then
       self:Hide()
+      return
     end
   end)
   f:EnableKeyboard(true)
+  f:SetPropagateKeyboardInput(true)
 
   f:SetBackdrop({
     bgFile = "Interface/Tooltips/UI-Tooltip-Background",
@@ -69,6 +71,14 @@ local function CreateRateFrame()
   f.nameValue:SetPoint("LEFT", f.nameText, "RIGHT", 8, 0)
   f.nameValue:SetText("")
 
+  f.viewLogsBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.viewLogsBtn:SetSize(80, 20)
+  f.viewLogsBtn:SetPoint("LEFT", f.nameValue, "RIGHT", 15, 0)
+  f.viewLogsBtn:SetText("View Logs")
+  f.viewLogsBtn:SetScript("OnClick", function()
+    addon.UI:ShowLogs(f.targetName)
+  end)
+
   f.ratingText = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   f.ratingText:SetPoint("TOPLEFT", f.nameText, "BOTTOMLEFT", 0, -30)
   f.ratingText:SetText("Rating:")
@@ -92,10 +102,19 @@ local function CreateRateFrame()
     local rating = current or 0
     if rating == 0 then
       self.ratingDisplay:SetText("")
+      if self.removeRating then
+        self.removeRating:Hide()
+      end
     elseif rating == 1 then
       self.ratingDisplay:SetText("1 Star")
+      if self.removeRating then
+        self.removeRating:Show()
+      end
     else
       self.ratingDisplay:SetText(rating .. " Stars")
+      if self.removeRating then
+        self.removeRating:Show()
+      end
     end
   end
 
@@ -156,6 +175,17 @@ local function CreateRateFrame()
   f.ratingDisplay:SetTextColor(1, 1, 1)
   f.ratingDisplay:SetText("")
 
+  f.removeRating = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.removeRating:SetSize(100, 20)
+  f.removeRating:SetPoint("LEFT", f.ratingDisplay, "RIGHT", 15, 0)
+  f.removeRating:SetText("Remove rating")
+  f.removeRating:Hide()
+  f.removeRating:SetScript("OnClick", function()
+    f.currentRating = 0
+    f:UpdateStars(0)
+    f.noteBox:SetText("")
+  end)
+
   f.noteText = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   f.noteText:SetPoint("TOPLEFT", f.ratingText, "BOTTOMLEFT", 0, -30)
   f.noteText:SetText("Note:")
@@ -192,6 +222,7 @@ local function CreateRateFrame()
   normalizeButton(f.cancel)
   normalizeButton(f.list)
   normalizeButton(f.closeX)
+  normalizeButton(f.viewLogsBtn)
 
   f.cancel:SetScript("OnClick", function() 
     local currentTarget = f.targetName
@@ -249,7 +280,10 @@ local rateFrame
 function UI:Show(playerName)
   rateFrame = rateFrame or CreateRateFrame()
   local key = NormalizeName(playerName)
-  local rec = addon:GetPlayer(key)
+  local rec = nil
+  if PugRaterDB and PugRaterDB.players and PugRaterDB.players[key] then
+    rec = PugRaterDB.players[key]
+  end
   rateFrame.targetName = key
   rateFrame.nameValue:SetText(key)
   rateFrame.noteBox:SetText(rec and rec.note or "")
@@ -273,9 +307,11 @@ local function CreateListFrame()
   f:SetScript("OnKeyDown", function(self, key)
     if key == "ESCAPE" then
       self:Hide()
+      return
     end
   end)
   f:EnableKeyboard(true)
+  f:SetPropagateKeyboardInput(true)
   
   f:SetScript("OnShow", function(self)
     self:EnableKeyboard(false)
@@ -315,31 +351,38 @@ local function CreateListFrame()
   f.sortLabel:SetText("Sort By:")
 
   f.sortDropdown = CreateFrame("Button", nil, f, "UIDropDownMenuTemplate")
-  f.sortDropdown:SetPoint("LEFT", f.sortLabel, "RIGHT", -15, -2)
+  f.sortDropdown:SetPoint("LEFT", f.sortLabel, "RIGHT", -15, 0)
 
   f.searchLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.searchLabel:SetPoint("LEFT", f.sortDropdown, "RIGHT", 0, 2)
+  f.searchLabel:SetPoint("LEFT", f.sortDropdown, "RIGHT", -3, 0)
   f.searchLabel:SetText("Search:")
 
   f.search = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
   f.search:SetSize(180, 24)
-  f.search:SetPoint("LEFT", f.searchLabel, "RIGHT", 8, 0)
+  f.search:SetPoint("LEFT", f.searchLabel, "RIGHT", 5, 0)
   f.search:SetAutoFocus(false)
 
   f.ratingFilterLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.ratingFilterLabel:SetPoint("TOPRIGHT", -120, -79)
+  f.ratingFilterLabel:SetPoint("TOPRIGHT", -120, -80)
   f.ratingFilterLabel:SetText("Filter:")
 
   f.ratingFilter = CreateFrame("Button", nil, f, "UIDropDownMenuTemplate")
-  f.ratingFilter:SetPoint("LEFT", f.ratingFilterLabel, "RIGHT", -15, -2)
+  f.ratingFilter:SetPoint("LEFT", f.ratingFilterLabel, "RIGHT", -15, 0)
   
   f.selectedRatingFilter = "all"
 
+  f.headerBg = f:CreateTexture(nil, "BACKGROUND")
+  f.headerBg:SetPoint("TOPLEFT", 16, -107)
+  f.headerBg:SetPoint("TOPRIGHT", -36, -107)
+  f.headerBg:SetHeight(20)
+  f.headerBg:SetTexture("Interface/Tooltips/UI-Tooltip-Background")
+  f.headerBg:SetVertexColor(0, 0, 0, 0.7)
+
   f.hName = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.hName:SetPoint("TOPLEFT", 23, -110)
+  f.hName:SetPoint("TOPLEFT", 23.5, -110)
   f.hName:SetText("Name")
   f.hRating = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.hRating:SetPoint("LEFT", f.hName, "RIGHT", 210, 0)
+  f.hRating:SetPoint("LEFT", f.hName, "RIGHT", 209.5, 0)
   f.hRating:SetText("Rating")
   f.hNote = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   f.hNote:SetPoint("LEFT", f.hRating, "RIGHT", 25, 0)
@@ -361,6 +404,13 @@ local function CreateListFrame()
   local function RatingFilterDropDown_OnClick(self)
     f.selectedRatingFilter = self.value
     UIDropDownMenu_SetText(f.ratingFilter, self:GetText())
+    
+    if f.selectedRatingFilter == "unrated" then
+      f.deleteUnratedBtn:Show()
+    else
+      f.deleteUnratedBtn:Hide()
+    end
+    
     addon.UI:RefreshList()
   end
 
@@ -369,6 +419,7 @@ local function CreateListFrame()
     local ratings = {
       {text = "All", value = "all"},
       {text = "Unrated", value = "unrated"},
+      {text = "Rated", value = "rated"},
       {text = "1 Star", value = "1"},
       {text = "2 Stars", value = "2"},
       {text = "3 Stars", value = "3"},
@@ -418,9 +469,40 @@ local function CreateListFrame()
   UIDropDownMenu_SetWidth(f.sortDropdown, 100)
   UIDropDownMenu_SetText(f.sortDropdown, "Recent")
 
+  f.deleteUnratedBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.deleteUnratedBtn:SetSize(120, 24)
+  f.deleteUnratedBtn:SetPoint("BOTTOMRIGHT", -32, 6)
+  f.deleteUnratedBtn:SetText("Delete all unrated")
+  f.deleteUnratedBtn:Hide()
+  f.deleteUnratedBtn:SetScript("OnClick", function()
+    StaticPopup_Show("PUGRATER_DELETE_UNRATED")
+  end)
+
   f:Hide()
   return f
 end
+
+StaticPopupDialogs["PUGRATER_DELETE_UNRATED"] = {
+  text = "Are you sure you want to delete all unrated players? This cannot be undone.",
+  button1 = "Yes",
+  button2 = "No",
+  OnAccept = function()
+    if PugRaterDB and PugRaterDB.players then
+      for key, rec in pairs(PugRaterDB.players) do
+        if not rec.rating or rec.rating == 0 then
+          PugRaterDB.players[key] = nil
+        end
+      end
+      if addon.UI and addon.UI.RefreshList then
+        addon.UI:RefreshList()
+      end
+    end
+  end,
+  timeout = 0,
+  whileDead = true,
+  hideOnEscape = true,
+  preferredIndex = 3,
+}
 
 local listFrame
 
@@ -445,6 +527,8 @@ local function matchesFilter(key, rec, needle, ratingFilter)
     local rating = rec.rating or 0
     if ratingFilter == "unrated" then
       if rating > 0 then return false end
+    elseif ratingFilter == "rated" then
+      if rating <= 0 then return false end
     else
       local targetRating = tonumber(ratingFilter)
       if rating ~= targetRating then return false end
@@ -639,7 +723,7 @@ local function CreatePostRunFrame()
   if not f.logo then
     f.logo = f:CreateTexture(nil, "ARTWORK")
     f.logo:SetSize(LOGO_WIDTH, LOGO_HEIGHT)
-    f.logo:SetPoint("TOPLEFT", 16, -8)
+    f.logo:SetPoint("BOTTOMLEFT", 16, -20)
     f.logo:SetTexture(LOGO_PATH)
     f.logo:Hide()
   end
@@ -656,3 +740,269 @@ function UI:ShowPostRun(names)
   postRunFrame:SetMembers(names or {})
   postRunFrame:Show()
 end
+
+local function CreateLogsFrame()
+  local f = CreateFrame("Frame", "PugRaterLogsFrame", UIParent, "BackdropTemplate")
+  f:SetFrameStrata("DIALOG")
+  f:SetFrameLevel(200)
+  f:SetToplevel(true)
+  f:SetSize(650, 450)
+  f:SetPoint("CENTER")
+  f:SetMovable(true)
+  f:EnableMouse(true)
+  f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", f.StartMoving)
+  f:SetScript("OnDragStop", f.StopMovingOrSizing)
+  
+  f:SetScript("OnKeyDown", function(self, key)
+    if key == "ESCAPE" then
+      self:Hide()
+      return
+    end
+  end)
+  f:EnableKeyboard(true)
+  f:SetPropagateKeyboardInput(true)
+  
+  f:SetBackdrop({
+    bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+    edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 16,
+    insets = { left = 4, right = 4, top = 4, bottom = 4 }
+  })
+  f:SetBackdropColor(0,0,0,0.9)
+
+  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+  f.title:SetPoint("TOP", 0, -16)
+  f.title:SetText("Activity Logs")
+
+  f.playerName = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  f.playerName:SetPoint("TOP", 0, -40)
+  f.playerName:SetText("")
+
+  f.closeX = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.closeX:SetSize(24, 24)
+  f.closeX:SetPoint("TOPRIGHT", -8, -8)
+  f.closeX:SetText("X")
+  f.closeX:SetScript("OnClick", function() f:Hide() end)
+
+  f.scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+  f.scroll:SetPoint("TOPLEFT", 16, -70)
+  f.scroll:SetPoint("BOTTOMRIGHT", -36, 50)
+
+  f.content = CreateFrame("Frame", nil, f)
+  f.content:SetSize(1,1)
+  f.scroll:SetScrollChild(f.content)
+
+  f.noDataText = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.noDataText:SetPoint("CENTER", f.scroll, "CENTER", 0, 0)
+  f.noDataText:SetText("No activity data found for this player.")
+  f.noDataText:SetTextColor(0.7, 0.7, 0.7)
+
+  f.infoText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  f.infoText:SetPoint("BOTTOM", 0, 16)
+  f.infoText:SetText("Note: Only activities since PugRater was installed are tracked.")
+  f.infoText:SetTextColor(0.6, 0.6, 0.6)
+
+  f.rows = {}
+
+  f:Hide()
+  return f
+end
+
+local logsFrame
+
+function UI:ShowLogs(playerName)
+  logsFrame = logsFrame or CreateLogsFrame()
+  logsFrame.playerName:SetText("Activity with: " .. (playerName or "Unknown"))
+  
+  -- Clear existing rows
+  for i, row in ipairs(logsFrame.rows) do
+    row:Hide()
+  end
+  
+  -- Get activity data (placeholder for now - would need to be tracked by main addon)
+  local activities = {}
+  if PugRaterDB and PugRaterDB.activities and PugRaterDB.activities[playerName] then
+    activities = PugRaterDB.activities[playerName]
+  end
+  
+  if #activities == 0 then
+    logsFrame.noDataText:Show()
+    logsFrame.content:SetSize(600, 100)
+  else
+    logsFrame.noDataText:Hide()
+    
+    local ROW_H = 24
+    local WIDTH = logsFrame.scroll:GetWidth() or 600
+    logsFrame.content:SetSize(WIDTH-20, math.max(#activities * ROW_H, logsFrame.scroll:GetHeight()))
+    
+    for i, activity in ipairs(activities) do
+      local row = logsFrame.rows[i]
+      if not row then
+        row = CreateFrame("Frame", nil, logsFrame.content)
+        row:SetSize(WIDTH-20, ROW_H)
+        if i == 1 then
+          row:SetPoint("TOPLEFT", 0, 0)
+        else
+          row:SetPoint("TOPLEFT", logsFrame.rows[i-1], "BOTTOMLEFT", 0, -2)
+        end
+        
+        row.bg = row:CreateTexture(nil, "BACKGROUND")
+        row.bg:SetAllPoints()
+        row.bg:SetTexture("Interface/Buttons/UI-Listbox-Highlight")
+        row.bg:SetAlpha(0.1)
+        
+        row.date = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.date:SetPoint("LEFT", 8, 0)
+        row.date:SetWidth(80)
+        row.date:SetJustifyH("LEFT")
+        
+        row.type = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.type:SetPoint("LEFT", row.date, "RIGHT", 8, 0)
+        row.type:SetWidth(60)
+        row.type:SetJustifyH("LEFT")
+        
+        row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.name:SetPoint("LEFT", row.type, "RIGHT", 8, 0)
+        row.name:SetWidth(180)
+        row.name:SetJustifyH("LEFT")
+        
+        row.result = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.result:SetPoint("LEFT", row.name, "RIGHT", 8, 0)
+        row.result:SetWidth(120)
+        row.result:SetJustifyH("LEFT")
+        
+        row.time = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.time:SetPoint("LEFT", row.result, "RIGHT", 8, 0)
+        row.time:SetWidth(80)
+        row.time:SetJustifyH("LEFT")
+        
+        logsFrame.rows[i] = row
+      end
+      
+      row.date:SetText(activity.date or "Unknown")
+      row.type:SetText(activity.type or "Unknown")
+      row.name:SetText(activity.name or "Unknown")
+      
+      if activity.completed then
+        row.result:SetText("Completed")
+        row.result:SetTextColor(0, 1, 0)
+      else
+        row.result:SetText("Failed")
+        row.result:SetTextColor(1, 0, 0)
+      end
+      
+      row.time:SetText(activity.time or "Unknown")
+      
+      row:Show()
+    end
+  end
+  
+  logsFrame:Show()
+end
+
+-- Simple Key Completion Tracking
+local keyTracker = CreateFrame("Frame")
+local groupMembersAtStart = {}
+local raidMembersAtStart = {}
+
+local function InitializeActivityDB()
+  if not PugRaterDB then PugRaterDB = {} end
+  if not PugRaterDB.activities then PugRaterDB.activities = {} end
+end
+
+local function GetGroupMembers()
+  local members = {}
+  local numGroupMembers = GetNumGroupMembers()
+  
+  if numGroupMembers > 0 then
+    for i = 1, numGroupMembers do
+      local unit = (IsInRaid() and "raid" or "party") .. i
+      if UnitExists(unit) then
+        local name, realm = UnitFullName(unit)
+        if name then
+          local fullName = name
+          if realm and realm ~= "" and realm ~= GetRealmName() then
+            fullName = name .. "-" .. realm
+          else
+            fullName = name .. "-" .. GetRealmName()
+          end
+          table.insert(members, fullName)
+        end
+      end
+    end
+  end
+  
+  return members
+end
+
+local function RecordActivity(activityData, membersList)
+  InitializeActivityDB()
+  
+  for _, memberName in ipairs(membersList) do
+    if not PugRaterDB.activities[memberName] then
+      PugRaterDB.activities[memberName] = {}
+    end
+    
+    table.insert(PugRaterDB.activities[memberName], activityData)
+  end
+end
+
+keyTracker:SetScript("OnEvent", function(self, event, ...)
+  if event == "CHALLENGE_MODE_START" then
+    groupMembersAtStart = GetGroupMembers()
+    
+  elseif event == "CHALLENGE_MODE_COMPLETED" then
+    local mapID, level, time, onTime = C_ChallengeMode.GetCompletionInfo()
+    if mapID and level then
+      local mapName = C_ChallengeMode.GetMapUIInfo(mapID)
+      local minutes = math.floor(time / 60)
+      local seconds = time % 60
+      local timeString = string.format("%d:%02d", minutes, seconds)
+      
+      local keyData = {
+        date = date("%Y-%m-%d"),
+        type = "M+",
+        name = (mapName or "Unknown") .. " +" .. level,
+        completed = onTime,
+        time = timeString,
+        timestamp = time()
+      }
+      
+      RecordActivity(keyData, groupMembersAtStart)
+    end
+    
+  elseif event == "ENCOUNTER_START" then
+    raidMembersAtStart = GetGroupMembers()
+    
+  elseif event == "ENCOUNTER_END" then
+    local encounterID, encounterName, difficultyID, groupSize, success = ...
+    if encounterName and success ~= nil then
+      local instanceName = GetInstanceInfo()
+      local difficultyName = GetDifficultyInfo(difficultyID)
+      
+      local raidData = {
+        date = date("%Y-%m-%d"),
+        type = "Raid",
+        name = (instanceName or "Unknown") .. " - " .. (encounterName or "Unknown Boss"),
+        completed = (success == 1),
+        time = (difficultyName or "Unknown"),
+        timestamp = time()
+      }
+      
+      RecordActivity(raidData, raidMembersAtStart)
+    end
+    
+  elseif event == "ADDON_LOADED" then
+    local addonName = ...
+    if addonName == "PugRater" then
+      InitializeActivityDB()
+    end
+  end
+end)
+
+keyTracker:RegisterEvent("CHALLENGE_MODE_START")
+keyTracker:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+keyTracker:RegisterEvent("ENCOUNTER_START")
+keyTracker:RegisterEvent("ENCOUNTER_END")
+keyTracker:RegisterEvent("ADDON_LOADED")
