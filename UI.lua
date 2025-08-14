@@ -440,7 +440,6 @@ local function CreateListFrame()
   UIDropDownMenu_SetWidth(f.ratingFilter, 80)
   UIDropDownMenu_SetText(f.ratingFilter, "All")
 
-  -- Setup sort dropdown
   local function SortDropDown_OnClick(self)
     f.sortMode = self.value
     UIDropDownMenu_SetText(f.sortDropdown, self:GetText())
@@ -815,12 +814,10 @@ function UI:ShowLogs(playerName)
   logsFrame = logsFrame or CreateLogsFrame()
   logsFrame.playerName:SetText("Activity with: " .. (playerName or "Unknown"))
   
-  -- Clear existing rows
   for i, row in ipairs(logsFrame.rows) do
     row:Hide()
   end
   
-  -- Get activity data (placeholder for now - would need to be tracked by main addon)
   local activities = {}
   if PugRaterDB and PugRaterDB.activities and PugRaterDB.activities[playerName] then
     activities = PugRaterDB.activities[playerName]
@@ -884,12 +881,25 @@ function UI:ShowLogs(playerName)
       row.type:SetText(activity.type or "Unknown")
       row.name:SetText(activity.name or "Unknown")
       
-      if activity.completed then
-        row.result:SetText("Completed")
-        row.result:SetTextColor(0, 1, 0)
+      if activity.type == "M+" and activity.completionStatus then
+        if activity.completionStatus == "timed" then
+          row.result:SetText("Timed")
+          row.result:SetTextColor(0, 1, 0) -- Green for timed keys
+        elseif activity.completionStatus == "overtime" then
+          row.result:SetText("Over Time")
+          row.result:SetTextColor(0, 0.5, 1) -- Blue for over time
+        else
+          row.result:SetText("Depleted")
+          row.result:SetTextColor(1, 0, 0) -- Red for depleted keys
+        end
       else
-        row.result:SetText("Failed")
-        row.result:SetTextColor(1, 0, 0)
+        if activity.completed then
+          row.result:SetText("Completed")
+          row.result:SetTextColor(0, 1, 0)
+        else
+          row.result:SetText("Failed")
+          row.result:SetTextColor(1, 0, 0)
+        end
       end
       
       row.time:SetText(activity.time or "Unknown")
@@ -901,10 +911,10 @@ function UI:ShowLogs(playerName)
   logsFrame:Show()
 end
 
--- Simple Key Completion Tracking
 local keyTracker = CreateFrame("Frame")
 local groupMembersAtStart = {}
 local raidMembersAtStart = {}
+local currentKeyInfo = nil
 
 local function InitializeActivityDB()
   if not PugRaterDB then PugRaterDB = {} end
@@ -950,35 +960,84 @@ end
 
 keyTracker:SetScript("OnEvent", function(self, event, ...)
   if event == "CHALLENGE_MODE_START" then
+    if currentKeyInfo and groupMembersAtStart and #groupMembersAtStart > 0 then
+      local mapName = C_ChallengeMode.GetMapUIInfo(currentKeyInfo.mapID)
+      local keyData = {
+        date = date("%Y-%m-%d"),
+        type = "M+",
+        name = (mapName or "Unknown") .. " +" .. (currentKeyInfo.level or "?"),
+        completed = false,
+        completionStatus = "failed",
+        time = "Abandoned",
+        timestamp = time()
+      }
+      
+      print("PugRater: Previous key abandoned/failed - " .. keyData.name)
+      RecordActivity(keyData, groupMembersAtStart)
+    end
+    
     groupMembersAtStart = GetGroupMembers()
+    local mapID = C_ChallengeMode.GetActiveChallengeMapID()
+    if mapID then
+      local level = select(3, C_ChallengeMode.GetActiveKeystoneInfo()) or 
+                   select(2, C_MythicPlus.GetCurrentAffixes()) or 
+                   C_ChallengeMode.GetActiveKeystoneLevel() or
+                   select(4, GetInstanceInfo())
+      
+      currentKeyInfo = {
+        mapID = mapID,
+        level = level,
+        startTime = time()
+      }
+      
+      print("PugRater: Started tracking M+ key - " .. (C_ChallengeMode.GetMapUIInfo(mapID) or "Unknown") .. " +" .. (level or "?"))
+    end
     
   elseif event == "CHALLENGE_MODE_COMPLETED" then
-    local mapID, level, time, onTime = C_ChallengeMode.GetCompletionInfo()
-    if mapID and level then
+    local mapID, level, time, onTime, keystoneUpgraded = C_ChallengeMode.GetCompletionInfo()
+    print("PugRater: CHALLENGE_MODE_COMPLETED - mapID:", mapID, "level:", level, "time:", time, "onTime:", onTime)
+    
+    if mapID and level and groupMembersAtStart then
       local mapName = C_ChallengeMode.GetMapUIInfo(mapID)
       local minutes = math.floor(time / 60)
       local seconds = time % 60
       local timeString = string.format("%d:%02d", minutes, seconds)
       
+      local completionStatus = "failed" -- Default to failed
+      if onTime then
+        completionStatus = "timed" -- Completed in time (green)
+      elseif time > 0 then
+        completionStatus = "overtime" -- Completed over time (blue)
+      end
+      
       local keyData = {
         date = date("%Y-%m-%d"),
         type = "M+",
         name = (mapName or "Unknown") .. " +" .. level,
-        completed = onTime,
+        completed = (time > 0), -- Key was completed (either timed or overtime)
+        completionStatus = completionStatus, -- Additional field for M+ status
         time = timeString,
         timestamp = time()
       }
       
+      print("PugRater: Recording M+ completion:", keyData.name, "Status:", completionStatus)
       RecordActivity(keyData, groupMembersAtStart)
+      currentKeyInfo = nil
+    else
+      print("PugRater: Failed to record M+ - missing data. mapID:", mapID, "level:", level, "groupMembers:", #(groupMembersAtStart or {}))
     end
     
   elseif event == "ENCOUNTER_START" then
-    raidMembersAtStart = GetGroupMembers()
+    local instanceName, instanceType = GetInstanceInfo()
+    if instanceType == "raid" then
+      raidMembersAtStart = GetGroupMembers()
+    end
     
   elseif event == "ENCOUNTER_END" then
     local encounterID, encounterName, difficultyID, groupSize, success = ...
-    if encounterName and success ~= nil then
-      local instanceName = GetInstanceInfo()
+    local instanceName, instanceType = GetInstanceInfo()
+    
+    if encounterName and success ~= nil and instanceType == "raid" and raidMembersAtStart then
       local difficultyName = GetDifficultyInfo(difficultyID)
       
       local raidData = {
@@ -993,6 +1052,48 @@ keyTracker:SetScript("OnEvent", function(self, event, ...)
       RecordActivity(raidData, raidMembersAtStart)
     end
     
+  elseif event == "CHALLENGE_MODE_RESET" then
+    if currentKeyInfo and groupMembersAtStart then
+      local mapName = C_ChallengeMode.GetMapUIInfo(currentKeyInfo.mapID)
+      local keyData = {
+        date = date("%Y-%m-%d"),
+        type = "M+",
+        name = (mapName or "Unknown") .. " +" .. (currentKeyInfo.level or "?"),
+        completed = false,
+        completionStatus = "failed",
+        time = "Depleted",
+        timestamp = time()
+      }
+      
+      RecordActivity(keyData, groupMembersAtStart)
+      currentKeyInfo = nil
+    end
+    
+  elseif event == "PLAYER_ENTERING_WORLD" then
+    local isInstance, instanceType = IsInInstance()
+    
+    if currentKeyInfo and groupMembersAtStart and #groupMembersAtStart > 0 and 
+       (not isInstance or instanceType ~= "party") then
+      local mapName = C_ChallengeMode.GetMapUIInfo(currentKeyInfo.mapID)
+      local keyData = {
+        date = date("%Y-%m-%d"),
+        type = "M+",
+        name = (mapName or "Unknown") .. " +" .. (currentKeyInfo.level or "?"),
+        completed = false,
+        completionStatus = "failed",
+        time = "Left Instance",
+        timestamp = time()
+      }
+      
+      print("PugRater: Key failed due to leaving instance - " .. keyData.name)
+      RecordActivity(keyData, groupMembersAtStart)
+    end
+    
+    if not isInstance or instanceType ~= "party" then
+      currentKeyInfo = nil
+      groupMembersAtStart = {}
+    end
+    
   elseif event == "ADDON_LOADED" then
     local addonName = ...
     if addonName == "PugRater" then
@@ -1003,6 +1104,8 @@ end)
 
 keyTracker:RegisterEvent("CHALLENGE_MODE_START")
 keyTracker:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+keyTracker:RegisterEvent("CHALLENGE_MODE_RESET")
 keyTracker:RegisterEvent("ENCOUNTER_START")
 keyTracker:RegisterEvent("ENCOUNTER_END")
+keyTracker:RegisterEvent("PLAYER_ENTERING_WORLD")
 keyTracker:RegisterEvent("ADDON_LOADED")
