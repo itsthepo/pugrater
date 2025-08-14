@@ -1,0 +1,9 @@
+## Interface: 110100
+## Title: PugRater
+## Notes: Remember and rate pugs you've grouped with
+## Author: itsthepo
+## Version: 0.1.0
+## SavedVariables: PugRaterDB
+
+PugRater.lua
+UI.lua
