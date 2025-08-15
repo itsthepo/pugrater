@@ -260,16 +260,31 @@ local function CaptureGroupMembers()
   
   for i = 1, count do
     local unit = unitPrefix .. i
-    local name = GetUnitName(unit, true)
+    local name, realm = UnitName(unit)
     if name then
-      table.insert(members, name)
+      -- Ensure we have full name-realm format
+      local fullName = name
+      if realm and realm ~= "" then
+        fullName = name .. "-" .. realm
+      elseif not name:find("-") then
+        -- Add current realm if no realm specified
+        fullName = name .. "-" .. GetNormalizedRealmName()
+      end
+      table.insert(members, fullName)
+      debug("Captured member: " .. fullName)
     end
   end
   return members
 end
 
 local function RecordRunCompletion(completed, inTime)
-  if not currentRun.isActive then return end
+  if not currentRun.isActive then 
+    debug("RecordRunCompletion called but no active run!")
+    return 
+  end
+  
+  debug(string.format("RecordRunCompletion: completed=%s, inTime=%s, members=%d", 
+        tostring(completed), tostring(inTime), #currentRun.members))
   
   currentRun.completed = completed
   currentRun.inTime = inTime
@@ -299,7 +314,9 @@ local function RecordRunCompletion(completed, inTime)
   -- Also add to activities for individual player logs
   PugRaterDB.activities = PugRaterDB.activities or {}
   
+  debug("Adding activities for members:")
   for _, memberName in ipairs(currentRun.members) do
+    debug("Processing member: " .. tostring(memberName))
     local normalizedName = memberName
     
     -- Initialize activities for this player if needed
@@ -335,6 +352,7 @@ local function RecordRunCompletion(completed, inTime)
     
     -- Add to player's activity log
     table.insert(PugRaterDB.activities[normalizedName], activity)
+    debug(string.format("Added activity for %s: %s", normalizedName, activity.name))
     
     -- Keep only last 50 activities per player to prevent bloat
     if #PugRaterDB.activities[normalizedName] > 50 then
@@ -536,17 +554,56 @@ SlashCmdList["PUGRATER"] = function(msg)
     
     table.insert(PugRaterDB.activities[rest], testActivity)
     SystemMessage("Test activity added for: " .. rest)
+  elseif cmd == "reset" or cmd == "clear" then
+    -- Reset all addon data with confirmation
+    if rest == "confirm" then
+      -- Actually perform the reset
+      PugRaterDB.players = {}
+      PugRaterDB.history = {}
+      PugRaterDB.activities = {}
+      PugRaterDB.options = {
+        notifyOnJoin = true,
+        autoShowPostRun = true
+      }
+      SystemMessage("|cffff0000PugRater: All data has been reset!|r")
+    else
+      -- Show confirmation message
+      SystemMessage("|cffff9900WARNING: This will delete ALL PugRater data including:|r")
+      SystemMessage("- All player ratings and notes")
+      SystemMessage("- All mythic+ run history")
+      SystemMessage("- All player activity logs")
+      SystemMessage("- All addon settings")
+      SystemMessage("|cffff0000Type '/pr reset confirm' to proceed|r")
+    end
   elseif cmd == "cleardata" then
-    -- Clear all tracking data for testing
+    -- Clear only tracking data for testing (keep ratings)
     PugRaterDB.history = {}
     PugRaterDB.activities = {}
-    SystemMessage("All tracking data cleared!")
+    SystemMessage("Tracking data cleared (ratings preserved)!")
   elseif cmd == "debug" then
     debug("Current run active: " .. tostring(currentRun.isActive))
     debug("History entries: " .. #(PugRaterDB.history or {}))
     local activityCount = 0
-    for _ in pairs(PugRaterDB.activities or {}) do activityCount = activityCount + 1 end
+    for playerName, activities in pairs(PugRaterDB.activities or {}) do 
+      activityCount = activityCount + 1
+      debug(string.format("Player %s has %d activities", playerName, #activities))
+    end
     debug("Activities keys: " .. activityCount)
+  elseif cmd == "checkplayer" and rest ~= "" then
+    -- Check activity data for a specific player
+    local activities = PugRaterDB.activities and PugRaterDB.activities[rest]
+    if activities then
+      SystemMessage(string.format("Player %s has %d activities:", rest, #activities))
+      for i, activity in ipairs(activities) do
+        SystemMessage(string.format("  %d. %s - %s", i, activity.date, activity.name))
+      end
+    else
+      SystemMessage(string.format("No activities found for player: %s", rest))
+      SystemMessage("Available players:")
+      for playerName in pairs(PugRaterDB.activities or {}) do
+        SystemMessage("  " .. playerName)
+      end
+    end
   else
     SystemMessage("PugRater Commands:")
     SystemMessage("/pr rate - Rate your current target")
@@ -556,5 +613,7 @@ SlashCmdList["PUGRATER"] = function(msg)
     SystemMessage("/pr history - Show run history")
     SystemMessage("/pr stats - Show your statistics")
     SystemMessage("/pr toggle - Toggle notifications")
+    SystemMessage("/pr reset - Reset all addon data (requires confirmation)")
+    SystemMessage("/pr checkplayer <name-realm> - Check activity data for player")
   end
 end

@@ -901,12 +901,24 @@ function UI:ShowLogs(playerName)
   
   if playerName then
     -- Show specific player activities
+    -- Normalize the player name to match storage format
+    local normalizedName = NormalizeName(playerName)
     logsFrame.playerName:SetText("Activity with: " .. playerName)
-    if PugRaterDB and PugRaterDB.activities and PugRaterDB.activities[playerName] then
-      activities = PugRaterDB.activities[playerName]
-      DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r Found " .. #activities .. " activities for " .. playerName)
+    
+    DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r Looking for activities for: " .. playerName)
+    DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r Normalized name: " .. normalizedName)
+    
+    -- Try both the original name and normalized name
+    local playerActivities = nil
+    if PugRaterDB and PugRaterDB.activities then
+      playerActivities = PugRaterDB.activities[playerName] or PugRaterDB.activities[normalizedName]
+    end
+    
+    if playerActivities then
+      activities = playerActivities
+      DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r Found " .. #activities .. " activities")
     else
-      DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r No activities found for " .. tostring(playerName))
+      DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r No activities found for either name")
     end
   else
     -- Show all run history
