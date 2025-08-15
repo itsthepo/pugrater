@@ -382,10 +382,13 @@ local function CreateListFrame()
   f.hName:SetPoint("TOPLEFT", 23.5, -110)
   f.hName:SetText("Name")
   f.hRating = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.hRating:SetPoint("LEFT", f.hName, "RIGHT", 209.5, 0)
+  f.hRating:SetPoint("LEFT", f.hName, "RIGHT", 179.5, 0)
   f.hRating:SetText("Rating")
+  f.hLastRun = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.hLastRun:SetPoint("LEFT", f.hRating, "RIGHT", 45, 0)
+  f.hLastRun:SetText("Last Run")
   f.hNote = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  f.hNote:SetPoint("LEFT", f.hRating, "RIGHT", 25, 0)
+  f.hNote:SetPoint("LEFT", f.hLastRun, "RIGHT", 55, 0)
   f.hNote:SetText("Note")
 
   f.scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
@@ -590,17 +593,27 @@ function UI:RefreshList()
       
       row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
       row.name:SetPoint("LEFT", 8, 0)
-      row.name:SetWidth(240)
+      row.name:SetWidth(210)
       row.name:SetJustifyH("LEFT")
 
       row.rating = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       row.rating:SetPoint("LEFT", row.name, "RIGHT", 8, 0)
-      row.rating:SetWidth(60)
+      row.rating:SetWidth(50)
       row.rating:SetJustifyH("LEFT")
 
+      row.lastRun = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      row.lastRun:SetPoint("LEFT", row.rating, "RIGHT", 28, 0) -- Moved right to make room for icon
+      row.lastRun:SetWidth(60)
+      row.lastRun:SetJustifyH("LEFT")
+
+      -- Create thumbs up/down icon for last run status
+      row.lastRunIcon = row:CreateTexture(nil, "ARTWORK")
+      row.lastRunIcon:SetSize(16, 16)
+      row.lastRunIcon:SetPoint("LEFT", row.rating, "RIGHT", 8, 0)
+
       row.note = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-      row.note:SetPoint("LEFT", row.rating, "RIGHT", 8, 0)
-      row.note:SetWidth(WIDTH - 20 - 240 - 60 - 16)
+      row.note:SetPoint("LEFT", row.lastRun, "RIGHT", 8, 0)
+      row.note:SetWidth(WIDTH - 20 - 210 - 50 - 80 - 32)
       row.note:SetJustifyH("LEFT")
 
       row:SetScript("OnEnter", function(self)
@@ -642,7 +655,39 @@ function UI:RefreshList()
       row.rating:SetTextColor(1, 0.82, 0)
     end
 
-    row.note:SetText(truncateText(e.rec.note or "", 30))
+    -- Last Run completion status with icons
+    if e.rec.lastRunCompleted ~= nil then
+      if e.rec.lastRunCompleted then
+        if e.rec.lastRunInTime then
+          -- Thumbs up for in time completion
+          row.lastRunIcon:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+          row.lastRunIcon:SetVertexColor(0, 1, 0) -- Green
+          row.lastRun:SetText("In Time")
+          row.lastRun:SetTextColor(0, 1, 0) -- Green
+          row.lastRunIcon:Show()
+        else
+          -- Thumbs down for overtime completion
+          row.lastRunIcon:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+          row.lastRunIcon:SetVertexColor(1, 0.65, 0) -- Orange
+          row.lastRun:SetText("Over Time")
+          row.lastRun:SetTextColor(1, 0.65, 0) -- Orange
+          row.lastRunIcon:Show()
+        end
+      else
+        -- X for failed runs
+        row.lastRunIcon:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+        row.lastRunIcon:SetVertexColor(1, 0, 0) -- Red
+        row.lastRun:SetText("Failed")
+        row.lastRun:SetTextColor(1, 0, 0) -- Red
+        row.lastRunIcon:Show()
+      end
+    else
+      row.lastRunIcon:Hide()
+      row.lastRun:SetText("No Data")
+      row.lastRun:SetTextColor(0.6, 0.6, 0.6) -- Gray
+    end
+
+    row.note:SetText(truncateText(e.rec.note or "", 25)) -- Reduced to fit new column
     row.note:SetTextColor(0.5, 0.8, 1)
     row:Show()
   end
@@ -676,11 +721,30 @@ local function CreatePostRunFrame()
   f.title:SetPoint("TOP", 0, -12)
   f.title:SetText("Did you enjoy playing with these players?")
 
+  f.subtitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  f.subtitle:SetPoint("TOP", 0, -35)
+  f.subtitle:SetText("")
+
   f.rows = {}
 
-  function f:SetMembers(names)
+  function f:SetMembers(names, completed, inTime)
+    -- Update subtitle with completion status
+    if completed ~= nil then
+      if completed then
+        if inTime then
+          f.subtitle:SetText("|cff00ff00Key Completed In Time!|r")
+        else
+          f.subtitle:SetText("|cffffff00Key Completed (Over Time)|r")
+        end
+      else
+        f.subtitle:SetText("|cffff0000Key Failed|r")
+      end
+    else
+      f.subtitle:SetText("")
+    end
+
     for i,row in ipairs(self.rows) do row:Hide() end
-    local startY = -50
+    local startY = -60  -- Moved down to accommodate subtitle
     for i, name in ipairs(names or {}) do
       local row = self.rows[i]
       if not row then
@@ -707,8 +771,8 @@ local function CreatePostRunFrame()
       row:Show()
     end
 
-    local height = 100 + (#names * 36)
-    self:SetHeight(math.min(460, height))
+    local height = 120 + (#names * 36)  -- Increased base height for subtitle
+    self:SetHeight(math.min(480, height))
   end
 
   f.close = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
@@ -722,7 +786,7 @@ local function CreatePostRunFrame()
   if not f.logo then
     f.logo = f:CreateTexture(nil, "ARTWORK")
     f.logo:SetSize(LOGO_WIDTH, LOGO_HEIGHT)
-    f.logo:SetPoint("BOTTOMLEFT", 16, -20)
+    f.logo:SetPoint("BOTTOMLEFT", 16, -35)
     f.logo:SetTexture(LOGO_PATH)
     f.logo:Hide()
   end
@@ -734,9 +798,9 @@ end
 
 local postRunFrame
 
-function UI:ShowPostRun(names)
+function UI:ShowPostRun(names, completed, inTime)
   postRunFrame = postRunFrame or CreatePostRunFrame()
-  postRunFrame:SetMembers(names or {})
+  postRunFrame:SetMembers(names or {}, completed, inTime)
   postRunFrame:Show()
 end
 
@@ -812,15 +876,60 @@ local logsFrame
 
 function UI:ShowLogs(playerName)
   logsFrame = logsFrame or CreateLogsFrame()
-  logsFrame.playerName:SetText("Activity with: " .. (playerName or "Unknown"))
   
   for i, row in ipairs(logsFrame.rows) do
     row:Hide()
   end
   
   local activities = {}
-  if PugRaterDB and PugRaterDB.activities and PugRaterDB.activities[playerName] then
-    activities = PugRaterDB.activities[playerName]
+  
+  -- Debug output
+  if playerName then
+    DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r ShowLogs called for: " .. tostring(playerName))
+    if PugRaterDB and PugRaterDB.activities then
+      DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r Activities table exists")
+      local count = 0
+      for key, _ in pairs(PugRaterDB.activities) do
+        count = count + 1
+        DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r Activity key: " .. tostring(key))
+      end
+      DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r Total activity keys: " .. count)
+    else
+      DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r No activities table found")
+    end
+  end
+  
+  if playerName then
+    -- Show specific player activities
+    logsFrame.playerName:SetText("Activity with: " .. playerName)
+    if PugRaterDB and PugRaterDB.activities and PugRaterDB.activities[playerName] then
+      activities = PugRaterDB.activities[playerName]
+      DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r Found " .. #activities .. " activities for " .. playerName)
+    else
+      DEFAULT_CHAT_FRAME:AddMessage("|cff69ccf0[PugRater Debug]|r No activities found for " .. tostring(playerName))
+    end
+  else
+    -- Show all run history
+    logsFrame.playerName:SetText("All Mythic+ Run History")
+    if PugRaterDB and PugRaterDB.history then
+      for _, run in ipairs(PugRaterDB.history) do
+        local dungeonName = run.dungeonName or "Unknown Dungeon"
+        local activity = {
+          date = date("%m/%d %H:%M", run.date),
+          type = "M+",
+          name = string.format("%s +%d", dungeonName, run.level or 0),
+          completed = run.completed,
+          inTime = run.inTime,
+          completionStatus = run.inTime and "timed" or (run.completed and "overtime" or "depleted"),
+          duration = run.duration and string.format("%dm", math.floor(run.duration / 60)) or "Unknown"
+        }
+        table.insert(activities, activity)
+      end
+      -- Sort by most recent first
+      table.sort(activities, function(a, b) 
+        return (a.date or "") > (b.date or "")
+      end)
+    end
   end
   
   if #activities == 0 then
