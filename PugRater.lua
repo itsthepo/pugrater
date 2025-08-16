@@ -428,7 +428,12 @@ instFrame:SetScript("OnEvent", function(_, event, ...)
       currentRun.completionTime = time
     end
     
-    RecordRunCompletion(true, onTime)
+    -- Fix: The onTime parameter should be treated as a boolean indicating if the key was completed in time
+    -- If onTime is true, the key was completed within the timer
+    -- If onTime is false but time > 0, the key was completed but over time
+    local completedInTime = onTime == true or onTime == 1
+    
+    RecordRunCompletion(true, completedInTime)
     C_Timer.After(2, PromptRateAllCurrent)
     
   elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
