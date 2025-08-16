@@ -4,6 +4,7 @@
 ## Author: itsthepo
 ## Version: 0.1.0
 ## SavedVariables: PugRaterDB
+## X-Curse-Project-ID: 1326814
 
 PugRater.lua
 UI.lua
