@@ -1,0 +1,20 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'   # push a tag like v1.2.3 to publish
+
+jobs:
+  package-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # packager reads tags/changelog
+
+      # BigWigs WoW Packager action
+      - name: Build & Upload
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_TOKEN }}  # your CurseForge token
+        # Optional: you can also set WOWI/WAGO tokens if you publish there too
